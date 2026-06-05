@@ -388,6 +388,41 @@ The final score uses sentiment-aware weights that shift emphasis depending on co
 | 35--54      | Wait a Bit    |
 | 0--34       | Avoid         |
 
+### Backtest Validation
+
+To check whether the Buy-Score is actually informative -- rather than just a
+plausible-looking number -- `buy_score_backtest.py` re-computes the score on
+every historical date for every game in `data/` using **only the data
+available at that date** (no look-ahead), then measures how much the price
+actually fell over the following 60 days. A useful score should fire
+"Excellent Buy" right before a price floor (low future drop) and "Wait a Bit"
+right before a price drop (high future drop).
+
+```bash
+python buy_score_backtest.py --horizon 60
+```
+
+Results on the bundled dataset (47 games, 1707 point-in-time samples):
+
+| Recommendation  |    n | Median future discount missed | Rate of >=5% future drop |
+|-----------------|-----:|------------------------------:|-------------------------:|
+| Excellent Buy   |  473 |  **0.00%**                    |          **14.8%**       |
+| Good Value      |  492 |   20.08%                      |           61.0%          |
+| Fair Deal       |  387 |   50.01%                      |           82.7%          |
+| Wait a Bit      |  205 |   67.02%                      |           90.7%          |
+| Avoid           |  150 |   70.19%                      |           68.7%          |
+
+* Spearman correlation between Buy-Score and 60-day future discount missed:
+  **r = -0.66** (strong negative, exactly as expected -- higher score means
+  smaller subsequent price drop).
+* "Excellent Buy" calls miss almost no future discount; "Wait a Bit" calls
+  correctly predict a typical ~67% future drop with a 91% hit rate.
+* "Avoid" has a lower hit rate than "Wait a Bit" because it fires on
+  poorly-reviewed games whose prices are already stable / rarely discounted
+  further -- the sentiment side of the score dominates that bucket.
+
+Per-sample detail is written to `buy_score_backtest_results.csv`.
+
 ---
 
 ## ML Engine
