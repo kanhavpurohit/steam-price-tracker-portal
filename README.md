@@ -46,7 +46,7 @@ A full-stack web application for exploring historical price fluctuations and com
 
 ## Overview
 
-The Steam Game Price and Review Insight Portal aggregates historical pricing and user review data for 50+ Steam titles and presents it through a modern, dark-themed dashboard. Users can browse games by category, drill into individual game analytics, compare titles side-by-side, and receive data-driven purchase recommendations. An AI chatbot translates natural-language questions into live SQL queries against the database and returns human-readable answers.
+The Steam Game Price and Review Insight Portal aggregates historical pricing and user review data for ~85 Steam titles and presents it through a modern, dark-themed dashboard. Users can browse games by category, drill into individual game analytics, compare titles side-by-side, and receive data-driven purchase recommendations. An AI chatbot translates natural-language questions into live SQL queries against the database and returns human-readable answers.
 
 ---
 
@@ -93,7 +93,7 @@ steam_Tracker/
 |   +-- style.css                  # Global styles, design tokens, responsive layout
 |
 |-- data/
-|   +-- [CSV files]                # Price and review CSV files (50 games, ~100 files)
+|   +-- [CSV files]                # Price and review CSV files (~85 games, ~170 files)
 |
 |-- includes/
 |   |-- db.php                     # MySQL connection and table auto-creation
@@ -392,17 +392,24 @@ The final score uses sentiment-aware weights that shift emphasis depending on co
 
 To check whether the Buy-Score is actually informative -- rather than just a
 plausible-looking number -- `buy_score_backtest.py` re-computes the score on
-every historical date for every game in `data/` using **only the data
-available at that date** (no look-ahead), then measures how much the price
-actually fell over the following 60 days. A useful score should fire
-"Excellent Buy" right before a price floor (low future drop) and "Wait a Bit"
-right before a price drop (high future drop).
+every historical date for every game using **only the data available at that
+date** (no look-ahead), then measures how much the price actually fell over the
+following 60 days. A useful score should fire "Excellent Buy" right before a
+price floor (low future drop) and "Wait a Bit" right before a price drop (high
+future drop).
+
+The portal tracks the full ~85-title catalogue, but the headline validation
+figure below is pinned to a **fixed 48-title validation subset**
+(`validation_appids.txt`) so it stays reproducible as the catalogue grows.
+By default the backtest runs on that subset; pass `--all` to score the full
+catalogue instead (a larger, slightly weaker `r ~ -0.64` over ~2.6k samples).
 
 ```bash
-python buy_score_backtest.py --horizon 60
+python buy_score_backtest.py --horizon 60          # fixed validation subset
+python buy_score_backtest.py --horizon 60 --all    # full ~85-title catalogue
 ```
 
-Results on the bundled dataset (47 games, 1707 point-in-time samples):
+Results on the validation subset (47 games, 1707 point-in-time samples):
 
 | Recommendation  |    n | Median future discount missed | Rate of >=5% future drop |
 |-----------------|-----:|------------------------------:|-------------------------:|

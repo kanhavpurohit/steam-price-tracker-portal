@@ -70,7 +70,27 @@ def buy_score(current: float, hist_prices: pd.Series, pos_pct: float) -> float:
     return rs * rw + ps * pw
 
 
-def list_games() -> dict:
+VALIDATION_FILE = os.path.join(os.path.dirname(__file__), "validation_appids.txt")
+
+
+def load_validation_set() -> set | None:
+    """Appids of the fixed Buy-Score validation subset. The live portal tracks
+    the full catalogue under data/, but the headline backtest figure quoted in
+    the project (Spearman r = -0.66 over ~1.7k samples) is pinned to this fixed
+    set so it stays reproducible as the catalogue grows. Returns None if the
+    manifest is absent."""
+    if not os.path.exists(VALIDATION_FILE):
+        return None
+    ids = set()
+    with open(VALIDATION_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                ids.add(line)
+    return ids or None
+
+
+def list_games(only: set | None = None) -> dict:
     games: dict = {}
     for p in glob.glob(os.path.join(DATA_DIR, "*_prices.csv")):
         m = re.match(r"(.+)_([0-9]+)_prices\.csv", os.path.basename(p))
@@ -80,7 +100,10 @@ def list_games() -> dict:
         m = re.match(r"(.+)_([0-9]+)_reviews\.csv", os.path.basename(r))
         if not m: continue
         games.setdefault(m.group(2), {"name": m.group(1)})["reviews"] = r
-    return {k: v for k, v in games.items() if "prices" in v and "reviews" in v}
+    games = {k: v for k, v in games.items() if "prices" in v and "reviews" in v}
+    if only is not None:
+        games = {k: v for k, v in games.items() if k in only}
+    return games
 
 
 def load_game(g: dict):
@@ -93,9 +116,10 @@ def load_game(g: dict):
     return pr, rv
 
 
-def backtest(horizon_days: int = 60, warmup: int = 3, min_per_bucket: int = 30):
+def backtest(horizon_days: int = 60, warmup: int = 3, min_per_bucket: int = 30,
+             only: set | None = None):
     rows = []
-    games = list_games()
+    games = list_games(only=only)
     for appid, g in games.items():
         try:
             pr, rv = load_game(g)
@@ -130,7 +154,9 @@ def backtest(horizon_days: int = 60, warmup: int = 3, min_per_bucket: int = 30):
     df = pd.DataFrame(rows, columns=["appid", "name", "date", "price", "score",
                                      "bucket", "missed_savings_pct"])
 
+    scope = "full catalogue" if only is None else f"validation set ({len(only)} titles)"
     print(f"\nBuy-Score backtest -- does the score predict future price drops?")
+    print(f"scope = {scope}")
     print(f"horizon = {horizon_days} days, warmup = {warmup} price points")
     print(f"{df['appid'].nunique()} games, {len(df)} evaluated (game, date) samples\n")
 
@@ -163,5 +189,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--horizon", type=int, default=60)
     ap.add_argument("--warmup",  type=int, default=3)
+    ap.add_argument("--all", action="store_true",
+                    help="backtest the full catalogue instead of the fixed validation set")
     args = ap.parse_args()
-    backtest(horizon_days=args.horizon, warmup=args.warmup)
+    only = None if args.all else load_validation_set()
+    backtest(horizon_days=args.horizon, warmup=args.warmup, only=only)
